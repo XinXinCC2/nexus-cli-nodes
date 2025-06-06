@@ -1,0 +1,22 @@
+# macOS 系统文件
+.DS_Store
+
+# 日志文件
+*.log
+
+# 环境文件
+.env
+
+# 其他临时文件
+*.tmp
+*.temp
+
+# Docker 相关文件
+docker-compose.yml
+Dockerfile
+.docker/
+Dockerfile
+Dockerfile.nexus
+
+# 节点配置文件
+node_ids.txt 
