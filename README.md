@@ -2,6 +2,15 @@
 
 这是一个用于管理多个 Nexus 节点的 Shell 脚本，可以方便地启动、停止和监控多个 Nexus 节点。
 
+## 快速开始
+
+使用以下命令一键下载并安装脚本：
+
+```bash
+# 下载脚本并添加执行权限
+curl -L https://raw.githubusercontent.com/XinXinCC2/nexus-cli-nodes/main/start_nexusNodes.sh -o start_nexusNodes.sh && chmod +x start_nexusNodes.sh
+```
+
 ## 功能特点
 
 - 支持同时启动多个 Nexus 节点
@@ -32,8 +41,7 @@
    ```
    > 注意：`node_ids.txt` 文件不会被提交到 Git 仓库，您需要在本地创建并维护该文件。
 
-2. 给脚本添加执行权限：`chmod +x start_nexusNodes.sh`
-3. 运行脚本：`./start_nexusNodes.sh`
+2. 运行脚本：`./start_nexusNodes.sh`
 
 ## 菜单选项
 
