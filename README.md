@@ -14,8 +14,8 @@ curl -L https://raw.githubusercontent.com/XinXinCC2/nexus-cli-nodes/main/start_n
 或者使用以下命令一键下载并直接启动脚本：
 
 ```bash
-# 下载脚本，添加执行权限并直接启动
-curl -L https://raw.githubusercontent.com/XinXinCC2/nexus-cli-nodes/main/start_nexusNodes.sh -o start_nexusNodes.sh && chmod +x start_nexusNodes.sh && ./start_nexusNodes.sh
+# 启动脚本
+./start_nexusNodes.sh
 ```
 
 ## 功能特点
