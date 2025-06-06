@@ -14,9 +14,8 @@
 # Docker 相关文件
 docker-compose.yml
 Dockerfile
-.docker/
-Dockerfile
 Dockerfile.nexus
+.docker/
 
 # 节点配置文件
 node_ids.txt 
