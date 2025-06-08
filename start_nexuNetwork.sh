@@ -31,6 +31,9 @@ start_all_nodes() {
         return
     fi
 
+    # 创建日志目录
+    mkdir -p logs
+
     while IFS= read -r node_id || [ -n "$node_id" ]; do
         # 跳过空行
         if [ -z "$node_id" ]; then
@@ -38,13 +41,12 @@ start_all_nodes() {
         fi
         
         echo "正在启动 node_id: $node_id"
-        
-        # 使用 nohup 启动服务，输出重定向到 /dev/null
-        nohup ./nexus-network start --node-id "$node_id" > /dev/null 2>&1 &
-        
+
+        # 使用 nohup 启动服务，输出重定向到对应日志文件
+        nohup ./nexus-network start --node-id "$node_id" > "logs/node_${node_id}.log" 2>&1 &
+
         if [ $? -eq 0 ]; then
             echo "成功启动 node_id: $node_id"
-            # 保存进程ID
             echo $! > "node_${node_id}.pid"
         else
             echo "启动 node_id: $node_id 失败"
@@ -60,23 +62,21 @@ start_all_nodes() {
 stop_all_nodes() {
     echo "正在关闭所有 nexus 节点..."
     
-    # 查找所有 nexus 相关进程
     pids=$(pgrep -f "nexus-network.*start")
     
     if [ -z "$pids" ]; then
         echo "没有找到正在运行的 nexus 节点"
     else
         for pid in $pids; do
-            # 获取对应的 node_id
             node_id=$(ps -p $pid -o command= | grep -o "node-id [0-9]*" | awk '{print $2}')
             echo "正在停止 node_id: $node_id (PID: $pid)"
             
-            # 发送终止信号
             kill $pid
             if [ $? -eq 0 ]; then
                 echo "成功停止 node_id: $node_id"
-                # 删除对应的 pid 文件
                 rm -f "node_${node_id}.pid"
+                # 可选：停止节点时删除对应的日志文件
+                # rm -f "logs/node_${node_id}.log"
             else
                 echo "停止 node_id: $node_id 失败"
             fi
@@ -90,30 +90,36 @@ stop_all_nodes() {
 # 查看所有节点日志的函数
 view_all_logs() {
     clear
-    echo "正在获取所有节点的日志信息..."
+    echo "查看所有节点的日志信息（指定行号）"
     echo "=========================================="
-    
-    # 查找所有 nexus 相关进程
-    pids=$(pgrep -f "nexus-network.*start")
-    
-    if [ -z "$pids" ]; then
-        echo "没有找到正在运行的 nexus 节点"
+
+    read -p "请输入要查看的日志行号: " line_number
+
+    NODE_FILE="node_ids.txt"
+    if [ ! -f "$NODE_FILE" ]; then
+        echo "错误：未找到 $NODE_FILE 文件"
         read -p "按回车键继续..."
         return
     fi
-    
-    for pid in $pids; do
-        # 获取对应的 node_id
-        node_id=$(ps -p $pid -o command= | grep -o "node-id [0-9]*" | awk '{print $2}')
-        
+
+    while IFS= read -r node_id || [ -n "$node_id" ]; do
+        if [ -z "$node_id" ]; then
+            continue
+        fi
+
+        LOG_FILE="logs/node_${node_id}.log"
+        if [ ! -f "$LOG_FILE" ]; then
+            echo "节点ID: $node_id 的日志文件不存在"
+            continue
+        fi
+
         echo "节点ID: $node_id"
-        echo "日志信息:"
+        echo "日志信息（第 $line_number 行）:"
         echo "------------------------------------------"
-        # 获取进程的标准输出，并显示第五行
-        ps -p $pid -o command= | grep -o "node-id [0-9]*" | awk '{print $2}' | sed -n '5p'
+        sed -n "${line_number}p" "$LOG_FILE"
         echo "------------------------------------------"
-    done
-    
+    done < "$NODE_FILE"
+
     echo "=========================================="
     read -p "按回车键继续..."
 }
@@ -143,4 +149,3 @@ while true; do
             ;;
     esac
 done
-
