@@ -1,8 +1,11 @@
 # macOS 系统文件
 .DS_Store
 
-# 日志文件
+# 日志文件和目录
 *.log
+logs/
+node_*.log
+node_*.pid
 
 # 环境文件
 .env
@@ -18,4 +21,7 @@ Dockerfile.nexus
 .docker/
 
 # 节点配置文件
-node_ids.txt 
+node_ids.txt
+
+# 节点运行文件
+node_*.pid 
