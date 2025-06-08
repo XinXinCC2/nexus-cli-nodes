@@ -53,6 +53,11 @@ start_all_nodes() {
         return
     fi
 
+    # 创建日志目录
+    mkdir -p logs
+    # 清理旧的日志文件
+    rm -f logs/node_*.log
+
     # 统计变量
     total_nodes=0
     started_nodes=0
@@ -88,24 +93,37 @@ start_all_nodes() {
 
         echo -n -e "[${YELLOW}$node_id${NC}] 正在启动... "
         
+        # 创建日志文件
+        touch "logs/node_${node_id}.log"
+        
         # 使用screen启动节点，并设置日志轮转
         screen -dmS "node_${node_id}" bash -c "
-            ./nexus-network start --node-id \"$node_id\" 2>&1 | \
-            while read line; do
-                echo \"\$(date '+%Y-%m-%d %H:%M:%S') \$line\" >> \"logs/node_${node_id}.log\"
+            # 设置日志文件
+            LOG_FILE=\"logs/node_${node_id}.log\"
+            
+            # 启动节点并实时记录日志
+            ./nexus-network start --node-id \"$node_id\" 2>&1 | while read -r line; do
+                timestamp=\$(date '+%Y-%m-%d %H:%M:%S')
+                echo \"[\$timestamp] \$line\" >> \"\$LOG_FILE\"
+                
                 # 保持日志文件大小在100KB以内
-                if [ \$(stat -f%z \"logs/node_${node_id}.log\" 2>/dev/null || stat -c%s \"logs/node_${node_id}.log\") -gt 102400 ]; then
-                    tail -n 1000 \"logs/node_${node_id}.log\" > \"logs/node_${node_id}.log.tmp\"
-                    mv \"logs/node_${node_id}.log.tmp\" \"logs/node_${node_id}.log\"
+                if [ \$(stat -f%z \"\$LOG_FILE\" 2>/dev/null || stat -c%s \"\$LOG_FILE\") -gt 102400 ]; then
+                    tail -n 1000 \"\$LOG_FILE\" > \"\$LOG_FILE.tmp\"
+                    mv \"\$LOG_FILE.tmp\" \"\$LOG_FILE\"
                 fi
             done
         "
 
-        if screen -list | grep -q "node_${node_id}"; then
+        # 等待日志文件创建
+        sleep 1
+        
+        if screen -list | grep -q "node_${node_id}" && [ -f "logs/node_${node_id}.log" ]; then
             echo -e "${GREEN}成功${NC}"
             started_nodes=$((started_nodes + 1))
         else
             echo -e "${RED}失败${NC}"
+            # 清理失败的日志文件
+            rm -f "logs/node_${node_id}.log"
         fi
     done < "$NODE_FILE"
 
@@ -138,6 +156,8 @@ stop_all_nodes() {
             screen -S $session -X quit
             if [ $? -eq 0 ]; then
                 echo -e "${GREEN}成功${NC}"
+                # 删除对应的日志文件
+                rm -f "logs/node_${node_id}.log"
             else
                 echo -e "${RED}失败${NC}"
             fi
@@ -178,16 +198,16 @@ view_all_logs() {
         echo -e "${GREEN}------------------------------------------${NC}"
         
         LOG_FILE="logs/node_${node_id}.log"
-        if [ -f "$LOG_FILE" ]; then
-            # 获取第5行日志，如果文件行数不足5行，则获取最后一行
-            log_line=$(sed -n '5p' "$LOG_FILE" 2>/dev/null || tail -n 1 "$LOG_FILE")
-            if [ ! -z "$log_line" ]; then
-                echo -e "$log_line"
+        if [ -f "$LOG_FILE" ] && [ -s "$LOG_FILE" ]; then
+            # 获取最新的日志行
+            latest_log=$(tail -n 1 "$LOG_FILE")
+            if [ ! -z "$latest_log" ]; then
+                echo -e "$latest_log"
             else
                 echo -e "${YELLOW}暂无日志${NC}"
             fi
         else
-            echo -e "${YELLOW}日志文件不存在${NC}"
+            echo -e "${YELLOW}暂无日志${NC}"
         fi
         echo -e "${GREEN}------------------------------------------${NC}"
     done < "$NODE_FILE"
@@ -262,14 +282,18 @@ enter_node_session() {
     done
 
     echo -e "${GREEN}==========================================${NC}"
+    echo -e "${YELLOW}提示:${NC}"
+    echo -e "1. 使用 ${GREEN}Ctrl+A+D${NC} 可以退出会话（保持节点运行）"
+    echo -e "2. 使用 ${GREEN}Ctrl+C${NC} 可以停止节点"
+    echo -e "${GREEN}==========================================${NC}"
     echo -n "请选择要进入的节点 (输入数字): "
     read choice
 
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#sessions[@]} ]; then
         selected_session=${sessions[$((choice-1))]}
         echo -e "${GREEN}正在进入节点会话...${NC}"
-        echo -e "${YELLOW}提示: 使用 Ctrl+A+D 可以退出会话${NC}"
         sleep 1
+        # 使用 -r 参数重新连接到会话
         screen -r $selected_session
     else
         echo -e "${RED}无效的选择${NC}"
