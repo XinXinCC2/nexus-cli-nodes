@@ -123,40 +123,24 @@ view_all_logs() {
         return
     fi
     
-    # 创建临时日志查看会话
-    if tmux has-session -t nexus_logs 2>/dev/null; then
-        tmux kill-session -t nexus_logs
-    fi
-    
-    # 创建新的日志查看会话
-    tmux new-session -d -s nexus_logs
-    
     # 获取所有窗口（除了第一个窗口）
     windows=$(tmux list-windows -t nexus -F '#{window_index}' | tail -n +2)
     
-    # 为每个节点创建一个日志查看窗口
     for window in $windows; do
+        # 获取窗口名称
         window_name=$(tmux display-message -t "nexus:$window" -p '#{window_name}')
         node_id=$(echo "$window_name" | sed 's/node_//')
         
-        # 创建新的日志查看窗口
-        tmux new-window -t nexus_logs -n "$window_name" "echo '正在查看节点 $node_id 的日志...' && tmux capture-pane -pt nexus:$window"
+        # 获取窗口内容的第五行
+        fifth_line=$(tmux capture-pane -pt "nexus:$window" | sed -n '5p')
+        
+        echo "节点ID: $node_id"
+        echo "日志信息: $fifth_line"
+        echo "------------------------------------------"
     done
     
-    # 删除第一个窗口（默认的shell窗口）
-    tmux kill-window -t nexus_logs:0
-    
-    echo "已打开日志查看窗口"
-    echo "使用 'tmux attach -t nexus_logs' 查看所有节点日志"
-    echo "提示："
-    echo "1. 使用 Ctrl+b 然后按 n 切换到下一个窗口"
-    echo "2. 使用 Ctrl+b 然后按 p 切换到上一个窗口"
-    echo "3. 使用 Ctrl+b 然后按 d 退出日志查看（保持服务运行）"
-    echo "4. 使用 Ctrl+b 然后按 [ 进入滚动模式，按 q 退出滚动模式"
+    echo "=========================================="
     read -p "按回车键继续..."
-    
-    # 自动连接到日志查看会话
-    tmux attach -t nexus_logs
 }
 
 # 主循环
