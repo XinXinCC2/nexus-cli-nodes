@@ -94,28 +94,47 @@ start_all_nodes() {
 
         echo -n -e "[${YELLOW}$node_id${NC}] 正在启动... "
         
-        # 创建新的screen会话
-        screen -dmS "$session_name"
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}创建会话失败${NC}"
-            continue
-        fi
+        # 创建启动脚本
+        startup_script="start_node_${node_id}.sh"
+        cat > "$startup_script" << EOF
+#!/bin/bash
+# 设置日志文件
+LOG_FILE="logs/node_${node_id}.log"
+touch "\$LOG_FILE"
 
-        # 等待会话创建完成
-        sleep 1
+# 启动节点并记录日志
+exec ./nexus-network start --node-id "$node_id" 2>&1 | tee -a "\$LOG_FILE"
+EOF
 
-        # 在会话中启动节点
-        screen -S "$session_name" -X stuff "./nexus-network start --node-id $node_id$(printf '\r')"
+        # 设置脚本权限
+        chmod +x "$startup_script"
+
+        # 创建新的screen会话并运行启动脚本
+        screen -dmS "$session_name" "./$startup_script"
         
         # 等待节点启动
         sleep 2
         
-        if screen -list | grep -q "$session_name"; then
-            echo -e "${GREEN}成功${NC}"
-            started_nodes=$((started_nodes + 1))
+        # 检查节点是否成功启动
+        if screen -list | grep -q "$session_name" && [ -f "logs/node_${node_id}.log" ]; then
+            # 检查日志文件是否有内容
+            if [ -s "logs/node_${node_id}.log" ]; then
+                echo -e "${GREEN}成功${NC}"
+                started_nodes=$((started_nodes + 1))
+            else
+                echo -e "${RED}启动失败 - 无日志输出${NC}"
+                screen -S "$session_name" -X quit
+                rm -f "$startup_script"
+                continue
+            fi
         else
-            echo -e "${RED}失败${NC}"
+            echo -e "${RED}启动失败${NC}"
+            rm -f "$startup_script"
+            continue
         fi
+
+        # 清理启动脚本
+        rm -f "$startup_script"
     done < "$NODE_FILE"
 
     echo -e "${GREEN}==========================================${NC}"
@@ -179,6 +198,8 @@ view_all_logs() {
         fi
 
         session_name="node_${node_id}"
+        log_file="logs/node_${node_id}.log"
+        
         # 检查节点是否运行
         if screen -list | grep -q "$session_name"; then
             status="${GREEN}运行中${NC}"
@@ -197,6 +218,12 @@ view_all_logs() {
         echo -e "节点ID: ${YELLOW}$node_id${NC} (状态: $status)"
         if [ ! -z "$runtime" ]; then
             echo -e "$runtime"
+        fi
+        
+        # 显示最新日志
+        if [ -f "$log_file" ] && [ -s "$log_file" ]; then
+            echo -e "${GREEN}最新日志:${NC}"
+            tail -n 1 "$log_file"
         fi
         echo -e "${GREEN}------------------------------------------${NC}"
     done < "$NODE_FILE"
