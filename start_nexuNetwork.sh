@@ -102,8 +102,14 @@ start_all_nodes() {
 LOG_FILE="logs/node_${node_id}.log"
 touch "\$LOG_FILE"
 
-# 启动节点并记录日志
-exec ./nexus-network start --node-id "$node_id" 2>&1 | tee -a "\$LOG_FILE"
+# 启动节点并记录日志，只保留最后6行
+./nexus-network start --node-id "$node_id" 2>&1 | while read -r line; do
+    timestamp=\$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[\$timestamp] \$line" >> "\$LOG_FILE"
+    # 只保留最后6行
+    tail -n 6 "\$LOG_FILE" > "\$LOG_FILE.tmp"
+    mv "\$LOG_FILE.tmp" "\$LOG_FILE"
+done
 EOF
 
         # 设置脚本权限
@@ -182,7 +188,7 @@ stop_all_nodes() {
 view_all_logs() {
     clear
     echo -e "${GREEN}==========================================${NC}"
-    echo -e "${GREEN}查看所有节点状态${NC}"
+    echo -e "${GREEN}查看所有节点日志（第5行）${NC}"
     echo -e "${GREEN}==========================================${NC}"
 
     NODE_FILE="node_ids.txt"
@@ -220,10 +226,18 @@ view_all_logs() {
             echo -e "$runtime"
         fi
         
-        # 显示最新日志
+        # 显示第5行日志
         if [ -f "$log_file" ] && [ -s "$log_file" ]; then
-            echo -e "${GREEN}最新日志:${NC}"
-            tail -n 1 "$log_file"
+            echo -e "${GREEN}日志信息（第5行）:${NC}"
+            # 获取第5行，如果文件行数不足5行，则获取最后一行
+            log_line=$(sed -n '5p' "$log_file" 2>/dev/null || tail -n 1 "$log_file")
+            if [ ! -z "$log_line" ]; then
+                echo -e "$log_line"
+            else
+                echo -e "${YELLOW}暂无日志${NC}"
+            fi
+        else
+            echo -e "${YELLOW}暂无日志${NC}"
         fi
         echo -e "${GREEN}------------------------------------------${NC}"
     done < "$NODE_FILE"
