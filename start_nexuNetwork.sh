@@ -100,16 +100,9 @@ start_all_nodes() {
 #!/bin/bash
 # 设置日志文件
 LOG_FILE="logs/node_${node_id}.log"
-touch "\$LOG_FILE"
 
-# 启动节点并记录日志，只保留最后6行
-./nexus-network start --node-id "$node_id" 2>&1 | while read -r line; do
-    timestamp=\$(date '+%Y-%m-%d %H:%M:%S')
-    echo "[\$timestamp] \$line" >> "\$LOG_FILE"
-    # 只保留最后6行
-    tail -n 6 "\$LOG_FILE" > "\$LOG_FILE.tmp"
-    mv "\$LOG_FILE.tmp" "\$LOG_FILE"
-done
+# 启动节点并记录日志
+exec ./nexus-network start --node-id "$node_id" 2>&1 | tee -a "\$LOG_FILE"
 EOF
 
         # 设置脚本权限
