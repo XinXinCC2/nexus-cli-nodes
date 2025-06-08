@@ -16,7 +16,11 @@ show_menu() {
 
 # 启动所有节点的函数
 start_all_nodes() {
-    echo "开始读取node_ids.txt..."
+    clear
+    echo "=========================================="
+    echo "开始启动所有节点..."
+    echo "=========================================="
+    
     NODE_FILE="node_ids.txt"
     if [ ! -f "$NODE_FILE" ]; then
         echo "错误：未找到 $NODE_FILE 文件，请在脚本同目录下放置 node_ids.txt，每行一个 node_id"
@@ -34,17 +38,25 @@ start_all_nodes() {
     # 创建日志目录
     mkdir -p logs
 
+    # 统计变量
+    total_nodes=0
+    started_nodes=0
+    failed_nodes=0
+    running_nodes=0
+
     while IFS= read -r node_id || [ -n "$node_id" ]; do
         if [ -z "$node_id" ]; then
             continue
         fi
         
-        echo "正在启动 node_id: $node_id"
+        total_nodes=$((total_nodes + 1))
+        echo -n "正在启动 node_id: $node_id ... "
         
         # 检查是否已经存在该节点的进程
         existing_pid=$(pgrep -f "nexus-network.*start.*node-id $node_id")
         if [ ! -z "$existing_pid" ]; then
-            echo "节点 $node_id 已经在运行中 (PID: $existing_pid)"
+            echo "已在运行 (PID: $existing_pid)"
+            running_nodes=$((running_nodes + 1))
             continue
         fi
 
@@ -57,16 +69,30 @@ start_all_nodes() {
         
         # 检查进程是否还在运行
         if ps -p $pid > /dev/null; then
-            echo "成功启动 node_id: $node_id (PID: $pid)"
+            echo "成功 (PID: $pid)"
             echo $pid > "node_${node_id}.pid"
+            started_nodes=$((started_nodes + 1))
         else
-            echo "启动 node_id: $node_id 失败，请检查日志文件"
+            echo "失败"
+            failed_nodes=$((failed_nodes + 1))
         fi
     done < "$NODE_FILE"
 
-    echo "所有节点启动完成"
+    echo "=========================================="
+    echo "启动完成统计："
+    echo "总节点数: $total_nodes"
+    echo "新启动节点: $started_nodes"
+    echo "已在运行节点: $running_nodes"
+    echo "启动失败节点: $failed_nodes"
+    echo "=========================================="
     echo "使用 'ps aux | grep nexus-network' 查看所有进程"
-    read -p "按回车键继续..."
+    echo "使用功能3查看节点日志"
+    echo "=========================================="
+    
+    # 使用 -n 参数确保 read 命令不会显示提示符
+    read -n 1 -s -r -p "按任意键继续..."
+    # 清除输入缓冲区
+    while read -t 0; do read -n 1; done
 }
 
 # 关闭所有节点的函数
@@ -99,13 +125,14 @@ stop_all_nodes() {
 # 查看所有节点日志的函数
 view_all_logs() {
     clear
+    echo "=========================================="
     echo "查看所有节点日志的第5行"
     echo "=========================================="
 
     NODE_FILE="node_ids.txt"
     if [ ! -f "$NODE_FILE" ]; then
         echo "错误：未找到 $NODE_FILE 文件"
-        read -p "按回车键继续..."
+        read -n 1 -s -r -p "按任意键继续..."
         return
     fi
 
@@ -116,7 +143,7 @@ view_all_logs() {
 
         LOG_FILE="logs/node_${node_id}.log"
         if [ ! -f "$LOG_FILE" ]; then
-            echo "节点ID: $node_id 的日志文件不存在"
+            echo "节点ID: $node_id - 日志文件不存在"
             continue
         fi
 
@@ -128,7 +155,6 @@ view_all_logs() {
         fi
 
         echo "节点ID: $node_id (状态: $status)"
-        echo "日志信息（第5行）:"
         echo "------------------------------------------"
         if [ -s "$LOG_FILE" ]; then
             sed -n '5p' "$LOG_FILE"
@@ -139,7 +165,9 @@ view_all_logs() {
     done < "$NODE_FILE"
 
     echo "=========================================="
-    read -p "按回车键继续..."
+    read -n 1 -s -r -p "按任意键继续..."
+    # 清除输入缓冲区
+    while read -t 0; do read -n 1; done
 }
 
 # 主循环
