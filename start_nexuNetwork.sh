@@ -24,24 +24,11 @@ start_all_nodes() {
         return
     fi
 
-    # 检查是否安装了 tmux
-    if ! command -v tmux &> /dev/null; then
-        echo "错误：未安装 tmux，请先安装 tmux"
-        echo "可以使用命令：brew install tmux (MacOS) 或 apt-get install tmux (Ubuntu/Debian)"
-        read -p "按回车键继续..."
-        return
-    fi
-
     # 检查当前目录下是否存在 nexus-network
     if [ ! -f "./nexus-network" ]; then
         echo "错误：当前目录下未找到 nexus-network 可执行文件"
         read -p "按回车键继续..."
         return
-    fi
-
-    # 创建主会话（如果不存在）
-    if ! tmux has-session -t nexus 2>/dev/null; then
-        tmux new-session -d -s nexus
     fi
 
     while IFS= read -r node_id || [ -n "$node_id" ]; do
@@ -50,22 +37,22 @@ start_all_nodes() {
             continue
         fi
         
-        # 创建新的窗口
-        window_name="node_${node_id}"
-        echo "正在为 node_id: $node_id 创建窗口 $window_name"
+        echo "正在启动 node_id: $node_id"
         
-        # 在tmux会话中创建新窗口并启动服务
-        tmux new-window -t nexus -n "$window_name" "./nexus-network start --node-id $node_id"
+        # 使用 nohup 启动服务，输出重定向到 /dev/null
+        nohup ./nexus-network start --node-id "$node_id" > /dev/null 2>&1 &
         
         if [ $? -eq 0 ]; then
-            echo "成功启动 node_id: $node_id 的服务"
+            echo "成功启动 node_id: $node_id"
+            # 保存进程ID
+            echo $! > "node_${node_id}.pid"
         else
-            echo "启动 node_id: $node_id 的服务失败"
+            echo "启动 node_id: $node_id 失败"
         fi
     done < "$NODE_FILE"
 
     echo "所有 node_ids 启动完成"
-    echo "使用 'tmux attach -t nexus' 查看所有节点"
+    echo "使用 'ps aux | grep nexus-network' 查看所有进程"
     read -p "按回车键继续..."
 }
 
@@ -73,37 +60,27 @@ start_all_nodes() {
 stop_all_nodes() {
     echo "正在关闭所有 nexus 节点..."
     
-    # 检查tmux会话是否存在
-    if ! tmux has-session -t nexus 2>/dev/null; then
+    # 查找所有 nexus 相关进程
+    pids=$(pgrep -f "nexus-network.*start")
+    
+    if [ -z "$pids" ]; then
         echo "没有找到正在运行的 nexus 节点"
-        read -p "按回车键继续..."
-        return
-    fi
-    
-    # 获取所有窗口（除了第一个窗口）
-    windows=$(tmux list-windows -t nexus -F '#{window_index}' | tail -n +2)
-    
-    for window in $windows; do
-        # 获取窗口名称
-        window_name=$(tmux display-message -t "nexus:$window" -p '#{window_name}')
-        echo "正在停止窗口: $window_name 的服务"
-        
-        # 发送 Ctrl+C 到窗口
-        tmux send-keys -t "nexus:$window" C-c
-        sleep 1
-        # 关闭窗口
-        tmux kill-window -t "nexus:$window"
-        
-        if [ $? -eq 0 ]; then
-            echo "成功关闭窗口: $window_name"
-        else
-            echo "关闭窗口失败: $window_name"
-        fi
-    done
-    
-    # 如果只剩下第一个窗口，也关闭它
-    if [ $(tmux list-windows -t nexus | wc -l) -eq 1 ]; then
-        tmux kill-session -t nexus
+    else
+        for pid in $pids; do
+            # 获取对应的 node_id
+            node_id=$(ps -p $pid -o command= | grep -o "node-id [0-9]*" | awk '{print $2}')
+            echo "正在停止 node_id: $node_id (PID: $pid)"
+            
+            # 发送终止信号
+            kill $pid
+            if [ $? -eq 0 ]; then
+                echo "成功停止 node_id: $node_id"
+                # 删除对应的 pid 文件
+                rm -f "node_${node_id}.pid"
+            else
+                echo "停止 node_id: $node_id 失败"
+            fi
+        done
     fi
     
     echo "所有节点关闭操作完成"
@@ -116,26 +93,24 @@ view_all_logs() {
     echo "正在获取所有节点的日志信息..."
     echo "=========================================="
     
-    # 检查tmux会话是否存在
-    if ! tmux has-session -t nexus 2>/dev/null; then
+    # 查找所有 nexus 相关进程
+    pids=$(pgrep -f "nexus-network.*start")
+    
+    if [ -z "$pids" ]; then
         echo "没有找到正在运行的 nexus 节点"
         read -p "按回车键继续..."
         return
     fi
     
-    # 获取所有窗口（除了第一个窗口）
-    windows=$(tmux list-windows -t nexus -F '#{window_index}' | tail -n +2)
-    
-    for window in $windows; do
-        # 获取窗口名称
-        window_name=$(tmux display-message -t "nexus:$window" -p '#{window_name}')
-        node_id=$(echo "$window_name" | sed 's/node_//')
-        
-        # 获取窗口内容的第五行
-        fifth_line=$(tmux capture-pane -pt "nexus:$window" | sed -n '5p')
+    for pid in $pids; do
+        # 获取对应的 node_id
+        node_id=$(ps -p $pid -o command= | grep -o "node-id [0-9]*" | awk '{print $2}')
         
         echo "节点ID: $node_id"
-        echo "日志信息: $fifth_line"
+        echo "日志信息:"
+        echo "------------------------------------------"
+        # 获取进程的标准输出，并显示第五行
+        ps -p $pid -o command= | grep -o "node-id [0-9]*" | awk '{print $2}' | sed -n '5p'
         echo "------------------------------------------"
     done
     
