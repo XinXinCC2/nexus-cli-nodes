@@ -35,7 +35,6 @@ start_all_nodes() {
     mkdir -p logs
 
     while IFS= read -r node_id || [ -n "$node_id" ]; do
-        # 跳过空行
         if [ -z "$node_id" ]; then
             continue
         fi
@@ -75,8 +74,6 @@ stop_all_nodes() {
             if [ $? -eq 0 ]; then
                 echo "成功停止 node_id: $node_id"
                 rm -f "node_${node_id}.pid"
-                # 可选：停止节点时删除对应的日志文件
-                # rm -f "logs/node_${node_id}.log"
             else
                 echo "停止 node_id: $node_id 失败"
             fi
@@ -90,10 +87,8 @@ stop_all_nodes() {
 # 查看所有节点日志的函数
 view_all_logs() {
     clear
-    echo "查看所有节点的日志信息（指定行号）"
+    echo "查看所有节点日志的第5行"
     echo "=========================================="
-
-    read -p "请输入要查看的日志行号: " line_number
 
     NODE_FILE="node_ids.txt"
     if [ ! -f "$NODE_FILE" ]; then
@@ -114,9 +109,9 @@ view_all_logs() {
         fi
 
         echo "节点ID: $node_id"
-        echo "日志信息（第 $line_number 行）:"
+        echo "日志信息（第5行）:"
         echo "------------------------------------------"
-        sed -n "${line_number}p" "$LOG_FILE"
+        sed -n '5p' "$LOG_FILE"
         echo "------------------------------------------"
     done < "$NODE_FILE"
 
