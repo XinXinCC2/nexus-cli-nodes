@@ -86,44 +86,35 @@ start_all_nodes() {
             continue
         fi
 
-        if screen -list | grep -q "node_${node_id}"; then
+        session_name="node_${node_id}"
+        if screen -list | grep -q "$session_name"; then
             echo -e "[${YELLOW}$node_id${NC}] 已在运行"
             continue
         fi
 
         echo -n -e "[${YELLOW}$node_id${NC}] 正在启动... "
         
-        # 创建日志文件
-        touch "logs/node_${node_id}.log"
-        
-        # 使用screen启动节点，并设置日志轮转
-        screen -dmS "node_${node_id}" bash -c "
-            # 设置日志文件
-            LOG_FILE=\"logs/node_${node_id}.log\"
-            
-            # 启动节点并实时记录日志
-            ./nexus-network start --node-id \"$node_id\" 2>&1 | while read -r line; do
-                timestamp=\$(date '+%Y-%m-%d %H:%M:%S')
-                echo \"[\$timestamp] \$line\" >> \"\$LOG_FILE\"
-                
-                # 保持日志文件大小在100KB以内
-                if [ \$(stat -f%z \"\$LOG_FILE\" 2>/dev/null || stat -c%s \"\$LOG_FILE\") -gt 102400 ]; then
-                    tail -n 1000 \"\$LOG_FILE\" > \"\$LOG_FILE.tmp\"
-                    mv \"\$LOG_FILE.tmp\" \"\$LOG_FILE\"
-                fi
-            done
-        "
+        # 创建新的screen会话
+        screen -dmS "$session_name"
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}创建会话失败${NC}"
+            continue
+        fi
 
-        # 等待日志文件创建
+        # 等待会话创建完成
         sleep 1
+
+        # 在会话中启动节点
+        screen -S "$session_name" -X stuff "./nexus-network start --node-id $node_id$(printf '\r')"
         
-        if screen -list | grep -q "node_${node_id}" && [ -f "logs/node_${node_id}.log" ]; then
+        # 等待节点启动
+        sleep 2
+        
+        if screen -list | grep -q "$session_name"; then
             echo -e "${GREEN}成功${NC}"
             started_nodes=$((started_nodes + 1))
         else
             echo -e "${RED}失败${NC}"
-            # 清理失败的日志文件
-            rm -f "logs/node_${node_id}.log"
         fi
     done < "$NODE_FILE"
 
@@ -172,7 +163,7 @@ stop_all_nodes() {
 view_all_logs() {
     clear
     echo -e "${GREEN}==========================================${NC}"
-    echo -e "${GREEN}查看所有节点日志${NC}"
+    echo -e "${GREEN}查看所有节点状态${NC}"
     echo -e "${GREEN}==========================================${NC}"
 
     NODE_FILE="node_ids.txt"
@@ -187,31 +178,32 @@ view_all_logs() {
             continue
         fi
 
+        session_name="node_${node_id}"
         # 检查节点是否运行
-        if screen -list | grep -q "node_${node_id}"; then
+        if screen -list | grep -q "$session_name"; then
             status="${GREEN}运行中${NC}"
+            # 获取会话创建时间
+            start_time=$(screen -list | grep "$session_name" | awk '{print $3}')
+            if [ ! -z "$start_time" ]; then
+                runtime="运行时间: $start_time"
+            else
+                runtime="运行时间: 未知"
+            fi
         else
             status="${RED}未运行${NC}"
+            runtime=""
         fi
 
         echo -e "节点ID: ${YELLOW}$node_id${NC} (状态: $status)"
-        echo -e "${GREEN}------------------------------------------${NC}"
-        
-        LOG_FILE="logs/node_${node_id}.log"
-        if [ -f "$LOG_FILE" ] && [ -s "$LOG_FILE" ]; then
-            # 获取最新的日志行
-            latest_log=$(tail -n 1 "$LOG_FILE")
-            if [ ! -z "$latest_log" ]; then
-                echo -e "$latest_log"
-            else
-                echo -e "${YELLOW}暂无日志${NC}"
-            fi
-        else
-            echo -e "${YELLOW}暂无日志${NC}"
+        if [ ! -z "$runtime" ]; then
+            echo -e "$runtime"
         fi
         echo -e "${GREEN}------------------------------------------${NC}"
     done < "$NODE_FILE"
 
+    echo -e "${GREEN}==========================================${NC}"
+    echo -e "${YELLOW}提示:${NC}"
+    echo -e "使用功能5进入节点会话可以查看实时输出"
     echo -e "${GREEN}==========================================${NC}"
     read -n 1 -s -r -p "按任意键继续..."
 }
@@ -278,13 +270,15 @@ enter_node_session() {
     echo -e "可用的节点会话："
     for i in "${!sessions[@]}"; do
         node_id=$(echo ${sessions[$i]} | cut -d'_' -f2)
-        echo -e "$((i+1))) ${YELLOW}节点 $node_id${NC}"
+        start_time=$(screen -list | grep "${sessions[$i]}" | awk '{print $3}')
+        echo -e "$((i+1))) ${YELLOW}节点 $node_id${NC} (运行时间: $start_time)"
     done
 
     echo -e "${GREEN}==========================================${NC}"
     echo -e "${YELLOW}提示:${NC}"
     echo -e "1. 使用 ${GREEN}Ctrl+A+D${NC} 可以退出会话（保持节点运行）"
     echo -e "2. 使用 ${GREEN}Ctrl+C${NC} 可以停止节点"
+    echo -e "3. 使用 ${GREEN}Ctrl+A+K${NC} 可以关闭会话"
     echo -e "${GREEN}==========================================${NC}"
     echo -n "请选择要进入的节点 (输入数字): "
     read choice
