@@ -40,19 +40,31 @@ start_all_nodes() {
         fi
         
         echo "正在启动 node_id: $node_id"
+        
+        # 检查是否已经存在该节点的进程
+        existing_pid=$(pgrep -f "nexus-network.*start.*node-id $node_id")
+        if [ ! -z "$existing_pid" ]; then
+            echo "节点 $node_id 已经在运行中 (PID: $existing_pid)"
+            continue
+        fi
 
-        # 使用 nohup 启动服务，输出重定向到对应日志文件
+        # 使用 nohup 启动服务，确保进程在后台运行
         nohup ./nexus-network start --node-id "$node_id" > "logs/node_${node_id}.log" 2>&1 &
-
-        if [ $? -eq 0 ]; then
-            echo "成功启动 node_id: $node_id"
-            echo $! > "node_${node_id}.pid"
+        pid=$!
+        
+        # 等待一小段时间确保进程正常启动
+        sleep 1
+        
+        # 检查进程是否还在运行
+        if ps -p $pid > /dev/null; then
+            echo "成功启动 node_id: $node_id (PID: $pid)"
+            echo $pid > "node_${node_id}.pid"
         else
-            echo "启动 node_id: $node_id 失败"
+            echo "启动 node_id: $node_id 失败，请检查日志文件"
         fi
     done < "$NODE_FILE"
 
-    echo "所有 node_ids 启动完成"
+    echo "所有节点启动完成"
     echo "使用 'ps aux | grep nexus-network' 查看所有进程"
     read -p "按回车键继续..."
 }
@@ -108,10 +120,21 @@ view_all_logs() {
             continue
         fi
 
-        echo "节点ID: $node_id"
+        # 检查进程是否在运行
+        pid=$(pgrep -f "nexus-network.*start.*node-id $node_id")
+        status="运行中"
+        if [ -z "$pid" ]; then
+            status="未运行"
+        fi
+
+        echo "节点ID: $node_id (状态: $status)"
         echo "日志信息（第5行）:"
         echo "------------------------------------------"
-        sed -n '5p' "$LOG_FILE"
+        if [ -s "$LOG_FILE" ]; then
+            sed -n '5p' "$LOG_FILE"
+        else
+            echo "日志文件为空"
+        fi
         echo "------------------------------------------"
     done < "$NODE_FILE"
 
