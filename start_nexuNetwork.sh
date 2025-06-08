@@ -53,11 +53,6 @@ start_all_nodes() {
         return
     fi
 
-    # 创建日志目录
-    mkdir -p logs
-    # 清理旧的日志文件
-    rm -f logs/node_*.log
-
     # 统计变量
     total_nodes=0
     started_nodes=0
@@ -98,11 +93,8 @@ start_all_nodes() {
         startup_script="start_node_${node_id}.sh"
         cat > "$startup_script" << EOF
 #!/bin/bash
-# 设置日志文件
-LOG_FILE="logs/node_${node_id}.log"
-
-# 启动节点并记录日志
-exec ./nexus-network start --node-id "$node_id" 2>&1 | tee -a "\$LOG_FILE"
+# 启动节点，不存储日志
+exec ./nexus-network start --node-id "$node_id" > /dev/null 2>&1
 EOF
 
         # 设置脚本权限
@@ -115,13 +107,13 @@ EOF
         sleep 2
         
         # 检查节点是否成功启动
-        if screen -list | grep -q "$session_name" && [ -f "logs/node_${node_id}.log" ]; then
-            # 检查日志文件是否有内容
-            if [ -s "logs/node_${node_id}.log" ]; then
+        if screen -list | grep -q "$session_name"; then
+            # 检查进程是否在运行
+            if ps aux | grep -v grep | grep -q "nexus-network.*$node_id"; then
                 echo -e "${GREEN}成功${NC}"
                 started_nodes=$((started_nodes + 1))
             else
-                echo -e "${RED}启动失败 - 无日志输出${NC}"
+                echo -e "${RED}启动失败${NC}"
                 screen -S "$session_name" -X quit
                 rm -f "$startup_script"
                 continue
@@ -197,7 +189,6 @@ view_all_logs() {
         fi
 
         session_name="node_${node_id}"
-        log_file="logs/node_${node_id}.log"
         
         # 检查节点是否运行
         if screen -list | grep -q "$session_name"; then
@@ -209,29 +200,32 @@ view_all_logs() {
             else
                 runtime="运行时间: 未知"
             fi
+
+            # 获取进程ID
+            pid=$(ps aux | grep -v grep | grep "nexus-network.*$node_id" | awk '{print $2}')
+            if [ ! -z "$pid" ]; then
+                # 获取进程的第5行输出
+                log_line=$(ps -p $pid -o command= | grep -v grep | head -n 5 | tail -n 1 2>/dev/null)
+                if [ ! -z "$log_line" ]; then
+                    log_info="$log_line"
+                else
+                    log_info="${YELLOW}暂无日志输出${NC}"
+                fi
+            else
+                log_info="${YELLOW}无法获取进程信息${NC}"
+            fi
         else
             status="${RED}未运行${NC}"
             runtime=""
+            log_info="${YELLOW}节点未运行${NC}"
         fi
 
         echo -e "节点ID: ${YELLOW}$node_id${NC} (状态: $status)"
         if [ ! -z "$runtime" ]; then
             echo -e "$runtime"
         fi
-        
-        # 显示第5行日志
-        if [ -f "$log_file" ] && [ -s "$log_file" ]; then
-            echo -e "${GREEN}日志信息（第5行）:${NC}"
-            # 获取第5行，如果文件行数不足5行，则获取最后一行
-            log_line=$(sed -n '5p' "$log_file" 2>/dev/null || tail -n 1 "$log_file")
-            if [ ! -z "$log_line" ]; then
-                echo -e "$log_line"
-            else
-                echo -e "${YELLOW}暂无日志${NC}"
-            fi
-        else
-            echo -e "${YELLOW}暂无日志${NC}"
-        fi
+        echo -e "${GREEN}日志信息（第5行）:${NC}"
+        echo -e "$log_info"
         echo -e "${GREEN}------------------------------------------${NC}"
     done < "$NODE_FILE"
 
@@ -333,9 +327,6 @@ enter_node_session() {
 main() {
     # 检查screen是否安装
     check_screen
-
-    # 创建日志目录
-    mkdir -p logs
 
     # 主循环
     while true; do
