@@ -106,8 +106,6 @@ start_all_nodes() {
         fi
         
         echo "成功启动 node_id: $node_id 的服务"
-        echo "等待15秒后启动下一个服务..."
-        sleep 15
     done < "$NODE_FILE"
 
     echo "所有 node_ids 启动完成"
