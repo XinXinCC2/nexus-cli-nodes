@@ -63,6 +63,20 @@ curl -L https://raw.githubusercontent.com/XinXinCC2/nexus-cli-nodes/main/start_n
 3. 查看/进入会话
 4. 退出脚本
 
+## 后台启动命令
+
+如果需要单独在后台启动某个节点，可以使用以下命令：
+
+```bash
+nohup ./nexus-network start --node-id id --headless > /dev/null 2>&1 &
+```
+
+命令说明：
+- `nohup`: 使命令在后台运行，即使终端关闭也不会停止
+- `--headless`: 无界面模式运行
+- `> /dev/null 2>&1`: 将标准输出和错误输出重定向到空设备
+- `&`: 在后台运行
+
 ## 注意事项
 
 - 使用 screen 会话时，可以通过 `Ctrl+A` 然后按 `D` 来退出会话（保持服务运行）
