@@ -25,3 +25,5 @@ node_ids.txt
 
 # 节点运行文件
 node_*.pid 
+
+start_tm_nodes.sh
