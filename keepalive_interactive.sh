@@ -15,7 +15,7 @@ while true; do
   eval "$cmd"
 
   # 打印模拟交互提示符
-  echo -n "$USER@$(hostname):$PWD$ "
+  echo -n "$USER:$PWD$ "
   
   # 等待随机秒数后继续
   sleep "$sleep_time"
